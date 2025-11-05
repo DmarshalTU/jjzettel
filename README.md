@@ -6,6 +6,8 @@ A corporate second brain built with Rust, featuring a Zettelkasten-style note-ta
 
 jjzettel is a terminal-based knowledge management system designed for teams. It combines the power of Zettelkasten note-taking methodology with Jujutsu's modern version control system. Every note is a commit, and every link between notes creates a knowledge graph that grows with your organization.
 
+**Simple Architecture**: No server or middleware needed. Each client directly accesses a shared Jujutsu repository, making collaboration natural and distributed.
+
 ## ✨ Features
 
 - **📝 Note Management**: Create, edit, view, and delete notes
@@ -120,9 +122,31 @@ jjzettel/
 
 ### Components
 
-1. **Storage Layer** (`storage/`): Handles note persistence and Jujutsu integration
+1. **TUI Layer** (`tui/`): Terminal user interface and state management
 2. **Service Layer** (`service/`): Business logic for notes, tags, links
-3. **TUI Layer** (`tui/`): Terminal user interface and state management
+3. **Storage Layer** (`storage/`): Handles note persistence and Jujutsu integration
+
+### Multi-User & Collaboration
+
+Since jjzettel uses Jujutsu as its storage backend, collaboration is built-in:
+
+- **Shared Repository**: Multiple users can work with the same Jujutsu repository
+  - Via network file system (NFS, SMB, etc.)
+  - Via Git remote (using `jj git push/pull`)
+
+- **Sync Options**:
+  ```bash
+  # Using Git remote
+  jj git remote add origin <git-url>
+  jj git push
+  jj git pull
+  
+  # Or simply use shared network storage
+  export JJZETTEL_REPO=/shared/network/path/jjzettel_repo
+  ```
+
+- **Conflict Resolution**: Jujutsu handles merging automatically, making collaboration seamless
+- **No Server Required**: Each client connects directly to the Jujutsu repository
 
 ## 📝 Note Format
 
@@ -161,6 +185,25 @@ jjzettel follows Zettelkasten principles:
 2. **Linking**: Notes are connected to form a knowledge graph
 3. **Tags**: Additional organization through tags
 4. **Permanent Notes**: Notes are never deleted, only archived (via Jujutsu)
+5. **Backlinks**: Automatically see which notes link to the current note
+
+## 🔄 Collaboration Model
+
+Unlike traditional note-taking apps that require a server, jjzettel uses a simple peer-to-peer model:
+
+```
+Client 1 ──┐
+           ├──> Shared Jujutsu Repo <── Client 2
+Client 3 ──┘                    └── Client 4
+```
+
+**Benefits:**
+- ✅ No server to maintain
+- ✅ Works offline (Jujutsu handles sync when online)
+- ✅ Automatic conflict resolution
+- ✅ Full version history
+- ✅ Can use Git remotes for backup/sync
+- ✅ Works with shared network storage (NFS, SMB, etc.)
 
 ## 🛠️ Development
 
