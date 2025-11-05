@@ -22,6 +22,7 @@ pub struct App {
     pub is_searching: bool,
     pub search_query: String,
     pub selected_index: usize,
+    pub link_selected_index: usize,
     pub mode: AppMode,
     pub current_note: Option<Note>,
     pub input_buffer: String,
@@ -45,6 +46,7 @@ impl App {
             is_searching: false,
             search_query: String::new(),
             selected_index: 0,
+            link_selected_index: 0,
             mode: AppMode::List,
             current_note: None,
             input_buffer: String::new(),
@@ -83,6 +85,12 @@ impl App {
                 // Start search
                 self.mode = AppMode::Search;
                 self.input_buffer = String::new();
+            }
+            crossterm::event::KeyCode::Char('#') => {
+                // Start tag search
+                self.mode = AppMode::Search;
+                self.input_buffer = String::new();
+                self.input_buffer.push('#');
             }
             crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
                 let max_index = if self.is_searching {
@@ -128,6 +136,7 @@ impl App {
             crossterm::event::KeyCode::Esc => {
                 self.mode = AppMode::List;
                 self.current_note = None;
+                self.link_selected_index = 0;
             }
             crossterm::event::KeyCode::Char('e') => {
                 self.mode = AppMode::Edit;
@@ -144,6 +153,36 @@ impl App {
                 // Add tag
                 self.mode = AppMode::TagAdd;
                 self.input_buffer = String::new();
+            }
+            crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
+                // Navigate linked notes if available
+                if let Some(ref note) = self.current_note {
+                    if !note.links.is_empty() {
+                        let max_index = note.links.len().saturating_sub(1);
+                        if self.link_selected_index < max_index {
+                            self.link_selected_index += 1;
+                        }
+                    }
+                }
+            }
+            crossterm::event::KeyCode::Char('k') | crossterm::event::KeyCode::Up => {
+                // Navigate linked notes if available
+                if let Some(ref note) = self.current_note {
+                    if !note.links.is_empty() && self.link_selected_index > 0 {
+                        self.link_selected_index -= 1;
+                    }
+                }
+            }
+            crossterm::event::KeyCode::Enter => {
+                // Navigate to selected linked note
+                if let Some(ref note) = self.current_note {
+                    if let Some(link_id) = note.links.get(self.link_selected_index) {
+                        if let Ok(Some(linked_note)) = self.service.get_note(link_id) {
+                            self.current_note = Some(linked_note);
+                            self.link_selected_index = 0; // Reset selection
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -449,7 +488,7 @@ impl App {
         frame.render_stateful_widget(list, chunks[1], &mut state);
 
         // Help bar
-        let help = Paragraph::new("j/k: navigate | n: new | /: search | d: delete | Enter: view | Esc: quit")
+        let help = Paragraph::new("j/k: navigate | n: new | /: search | #: tag search | d: delete | Enter: view | Esc: quit")
             .block(Block::default().borders(Borders::ALL).title("Help"))
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(help, chunks[2]);
@@ -469,25 +508,32 @@ impl App {
 
         // Note content with links and tags
         if let Some(ref note) = self.current_note {
-            let mut content_text = note.content.clone();
+            let mut content_lines: Vec<String> = note.content.lines().map(|s| s.to_string()).collect();
             
             // Add tags section if there are any
             if !note.tags.is_empty() {
-                content_text.push_str("\n\n--- Tags ---\n");
-                content_text.push_str(&note.tags.join(", "));
-                content_text.push('\n');
+                content_lines.push(String::new());
+                content_lines.push("--- Tags ---".to_string());
+                content_lines.push(note.tags.join(", "));
             }
             
             // Add links section if there are any
             if !note.links.is_empty() {
-                content_text.push_str("\n--- Linked Notes ---\n");
-                for link_id in &note.links {
+                content_lines.push(String::new());
+                content_lines.push("--- Linked Notes ---".to_string());
+                for (i, link_id) in note.links.iter().enumerate() {
                     if let Ok(Some(linked_note)) = self.service.get_note(link_id) {
-                        content_text.push_str(&format!("→ {}\n", linked_note.title));
+                        let prefix = if i == self.link_selected_index {
+                            "→ "
+                        } else {
+                            "  "
+                        };
+                        content_lines.push(format!("{}{}", prefix, linked_note.title));
                     }
                 }
             }
             
+            let content_text = content_lines.join("\n");
             let content = Paragraph::new(content_text)
                 .block(Block::default().borders(Borders::ALL).title(note.title.as_str()))
                 .wrap(Wrap { trim: true });
@@ -495,7 +541,16 @@ impl App {
         }
 
         // Help bar
-        let help = Paragraph::new("e: edit | l: link | t: tag | Esc: back")
+        let help_text = if let Some(ref note) = self.current_note {
+            if !note.links.is_empty() {
+                "e: edit | l: link | t: tag | j/k: navigate links | Enter: open link | Esc: back"
+            } else {
+                "e: edit | l: link | t: tag | Esc: back"
+            }
+        } else {
+            "e: edit | l: link | t: tag | Esc: back"
+        };
+        let help = Paragraph::new(help_text)
             .block(Block::default().borders(Borders::ALL).title("Help"))
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(help, chunks[2]);

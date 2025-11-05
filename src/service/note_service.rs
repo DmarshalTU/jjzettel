@@ -168,9 +168,20 @@ impl NoteService {
         Ok(())
     }
 
-    /// Search notes by title or content
+    /// Search notes by title or content, or by tag if query starts with #
     pub fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
         let all_notes = self.list_notes()?;
+        
+        // If query starts with #, search by tag
+        if query.starts_with('#') {
+            let tag = query.trim_start_matches('#').trim();
+            if tag.is_empty() {
+                return Ok(all_notes);
+            }
+            return self.search_by_tag(tag);
+        }
+        
+        // Otherwise search by title or content
         let query_lower = query.to_lowercase();
         
         let filtered: Vec<Note> = all_notes
