@@ -672,15 +672,15 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
+        // Title bar - Warhammer 40k theme
         let title_text = if self.is_searching {
-            format!("jjzettel - Corporate Second Brain (Search: {})", self.search_query)
+            format!("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔ (Search: {})", self.search_query)
         } else {
-            "jjzettel - Corporate Second Brain".to_string()
+            "⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔".to_string()
         };
         let title = Paragraph::new(title_text)
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::White).bg(Color::DarkGray));
         frame.render_widget(title, chunks[0]);
 
         // Notes list with enhanced formatting
@@ -693,7 +693,7 @@ impl App {
                 let base_style = if is_selected {
                     Style::default().fg(Color::Yellow).bg(Color::DarkGray)
                 } else {
-                    Style::default()
+                    Style::default().fg(Color::White).bg(Color::Black)
                 };
                 
                 // Format date nicely
@@ -706,11 +706,11 @@ impl App {
                 // Build rich text with title, tags, and preview
                 let mut lines = vec![Line::default()];
                 
-                // Title line
+                // Title line - 40k theme (eye-friendly)
                 let title_line = if is_selected {
                     Line::from(vec![
-                        Span::styled("▶ ", Style::default().fg(Color::Cyan)),
-                        Span::styled(&note.title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        Span::styled("⚔ ", Style::default().fg(Color::Yellow)),
+                        Span::styled(&note.title, Style::default().fg(Color::Yellow)),
                     ])
                 } else {
                     Line::from(vec![
@@ -734,18 +734,18 @@ impl App {
                     ]));
                 }
                 
-                // Tags and metadata line
+                // Tags and metadata line - 40k theme (eye-friendly)
                 let mut meta_parts = vec![];
                 if !note.tags.is_empty() {
                     let tags_str = note.tags.iter()
                         .map(|t| format!("#{}", t))
                         .collect::<Vec<_>>()
                         .join(" ");
-                    meta_parts.push(Span::styled(format!("  [{}] ", tags_str), Style::default().fg(Color::Blue)));
+                    meta_parts.push(Span::styled(format!("  [{}] ", tags_str), Style::default().fg(Color::Red)));
                 }
-                meta_parts.push(Span::styled(format!("📅 {}", date_str), Style::default().fg(Color::DarkGray)));
+                meta_parts.push(Span::styled(format!("☠ {}", date_str), Style::default().fg(Color::DarkGray)));
                 if !note.links.is_empty() {
-                    meta_parts.push(Span::styled(format!(" 🔗 {}", note.links.len()), Style::default().fg(Color::Magenta)));
+                    meta_parts.push(Span::styled(format!(" ⚡ {}", note.links.len()), Style::default().fg(Color::Yellow)));
                 }
                 lines.push(Line::from(meta_parts));
                 
@@ -765,13 +765,13 @@ impl App {
         let list = List::new(items)
             .block(Block::default().borders(Borders::ALL).title(list_title))
             .highlight_style(Style::default().fg(Color::Yellow).bg(Color::DarkGray))
-            .highlight_symbol("▶ ");
+            .highlight_symbol("⚔ ");
         frame.render_stateful_widget(list, chunks[1], &mut state);
 
-        // Help bar
+        // Help bar - 40k theme (eye-friendly)
         let help = Paragraph::new("j/k: navigate | n: new | /: search | #: tag search | d: delete | c: duplicate | s: stats | r: refresh | ?: help | Enter: view | Esc: quit")
-            .block(Block::default().borders(Borders::ALL).title("Help"))
-            .style(Style::default().fg(Color::DarkGray));
+            .block(Block::default().borders(Borders::ALL).title(" IMPERIUM COMMAND PROTOCOLS "))
+            .style(Style::default().fg(Color::White).bg(Color::DarkGray));
         frame.render_widget(help, chunks[2]);
     }
 
@@ -781,10 +781,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Note content with enhanced formatting
@@ -804,26 +804,26 @@ impl App {
                 note.updated_at.split('T').next().unwrap_or("").to_string()
             };
             
-            // Metadata header
+            // Metadata header - 40k theme (eye-friendly)
             lines.push(Line::from(vec![
-                Span::styled("📅 Created: ", Style::default().fg(Color::Cyan)),
-                Span::styled(&created_date, Style::default().fg(Color::White)),
+                Span::styled("☠ Created: ", Style::default().fg(Color::Red)),
+                Span::styled(&created_date, Style::default().fg(Color::Yellow)),
                 Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("✏️  Updated: ", Style::default().fg(Color::Cyan)),
-                Span::styled(&updated_date, Style::default().fg(Color::White)),
+                Span::styled("⚡ Updated: ", Style::default().fg(Color::Red)),
+                Span::styled(&updated_date, Style::default().fg(Color::Yellow)),
             ]));
             lines.push(Line::default());
             
-            // Tags section with colored tags
+            // Tags section - 40k theme (eye-friendly)
             if !note.tags.is_empty() {
-                let mut tag_spans = vec![Span::styled("🏷️  Tags: ", Style::default().fg(Color::Cyan))];
+                let mut tag_spans = vec![Span::styled("⚔ Tags: ", Style::default().fg(Color::Red))];
                 for (i, tag) in note.tags.iter().enumerate() {
                     if i > 0 {
                         tag_spans.push(Span::styled(" ", Style::default()));
                     }
                     tag_spans.push(Span::styled(
                         format!("#{}", tag),
-                        Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                        Style::default().fg(Color::Yellow),
                     ));
                 }
                 lines.push(Line::from(tag_spans));
@@ -835,17 +835,17 @@ impl App {
                 lines.push(Line::from(Span::styled(line, Style::default().fg(Color::White))));
             }
             
-            // Backlinks section - collect backlinks first to avoid lifetime issues
+            // Backlinks section - 40k theme (eye-friendly)
             let backlinks: Vec<_> = self.service.get_backlinks(&note.id).unwrap_or_default();
             if !backlinks.is_empty() {
                 lines.push(Line::default());
                 lines.push(Line::from(Span::styled(
-                    "← Backlinks (notes linking to this):",
-                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    "☠ Backlinks (notes linking to this):",
+                    Style::default().fg(Color::Red),
                 )));
                 for (i, backlink) in backlinks.iter().enumerate() {
                     let prefix = if i == self.backlink_selected_index {
-                        Span::styled("  ▶ ", Style::default().fg(Color::Yellow))
+                        Span::styled("  ⚔ ", Style::default().fg(Color::Yellow))
                     } else {
                         Span::styled("    ", Style::default())
                     };
@@ -857,12 +857,12 @@ impl App {
                 }
             }
             
-            // Links section - collect linked notes first to avoid lifetime issues
+            // Links section - 40k theme (eye-friendly)
             if !note.links.is_empty() {
                 lines.push(Line::default());
                 lines.push(Line::from(Span::styled(
-                    "→ Linked Notes:",
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                    "⚡ Linked Notes:",
+                    Style::default().fg(Color::Yellow),
                 )));
                 let linked_notes: Vec<_> = note.links
                     .iter()
@@ -873,7 +873,7 @@ impl App {
                     .collect();
                 for (i, (_link_id, linked_title)) in linked_notes.iter().enumerate() {
                     let prefix = if i == self.link_selected_index {
-                        Span::styled("  ▶ ", Style::default().fg(Color::Yellow))
+                        Span::styled("  ⚔ ", Style::default().fg(Color::Yellow))
                     } else {
                         Span::styled("    ", Style::default())
                     };
@@ -885,8 +885,9 @@ impl App {
             }
             
             let content = Paragraph::new(lines)
-                .block(Block::default().borders(Borders::ALL).title(note.title.as_str()))
-                .wrap(Wrap { trim: true });
+                .block(Block::default().borders(Borders::ALL).title(format!(" ⚔ {} ⚔ ", note.title)))
+                .wrap(Wrap { trim: true })
+                .style(Style::default().fg(Color::White).bg(Color::Black));
             frame.render_widget(content, chunks[1]);
         }
 
@@ -923,8 +924,8 @@ impl App {
             "e: edit | l: link | t: tag | h: history | E: export | Esc: back"
         };
         let help = Paragraph::new(help_text)
-            .block(Block::default().borders(Borders::ALL).title("Help"))
-            .style(Style::default().fg(Color::DarkGray));
+            .block(Block::default().borders(Borders::ALL).title(" IMPERIUM COMMAND PROTOCOLS "))
+            .style(Style::default().fg(Color::White).bg(Color::DarkGray));
         let help_chunk = chunks[chunks.len() - 1];
         frame.render_widget(help, help_chunk);
     }
@@ -935,10 +936,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Edit content with character count
@@ -955,10 +956,10 @@ impl App {
             .style(Style::default().fg(Color::White));
         frame.render_widget(content, chunks[1]);
 
-        // Help bar
+        // Help bar - 40k theme
         let help = Paragraph::new("Ctrl+S: save | Esc: cancel")
-            .block(Block::default().borders(Borders::ALL).title("Help"))
-            .style(Style::default().fg(Color::DarkGray));
+            .block(Block::default().borders(Borders::ALL).title(" IMPERIUM COMMAND PROTOCOLS "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black));
         frame.render_widget(help, chunks[2]);
     }
 
@@ -968,10 +969,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Create content with character count and title preview
@@ -990,10 +991,10 @@ impl App {
             .style(Style::default().fg(Color::White));
         frame.render_widget(content, chunks[1]);
 
-        // Help bar
+        // Help bar - 40k theme
         let help = Paragraph::new("Ctrl+S: create | Esc: cancel")
-            .block(Block::default().borders(Borders::ALL).title("Help"))
-            .style(Style::default().fg(Color::DarkGray));
+            .block(Block::default().borders(Borders::ALL).title(" IMPERIUM COMMAND PROTOCOLS "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black));
         frame.render_widget(help, chunks[2]);
     }
 
@@ -1003,17 +1004,17 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Length(3), Constraint::Min(0)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
-        // Search input with better styling
-        let search_prompt = format!("🔍 {}", self.input_buffer);
+        // Search input - 40k theme (eye-friendly)
+        let search_prompt = format!("⚔ {}", self.input_buffer);
         let search = Paragraph::new(search_prompt.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Search (type to search, Enter to apply)"))
-            .style(Style::default().fg(Color::Yellow));
+            .block(Block::default().borders(Borders::ALL).title(" INQUISITORIAL SEARCH "))
+            .style(Style::default().fg(Color::White).bg(Color::Black));
         frame.render_widget(search, chunks[1]);
 
         // Results preview with list
@@ -1062,10 +1063,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Confirmation message
@@ -1093,10 +1094,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Notes list for linking
@@ -1142,10 +1143,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Length(3), Constraint::Min(0)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Tag input
@@ -1177,10 +1178,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Confirmation message
@@ -1212,10 +1213,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Tags list
@@ -1266,10 +1267,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Statistics
@@ -1328,10 +1329,10 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Help content
@@ -1405,10 +1406,10 @@ OTHER:
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
             .split(frame.area());
 
-        // Title bar
-        let title = Paragraph::new("jjzettel - Corporate Second Brain")
-            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
-            .style(Style::default().fg(Color::Cyan));
+        // Title bar - 40k theme
+        let title = Paragraph::new("⚔ jjzettel - IMPERIUM KNOWLEDGE BASE ⚔")
+            .block(Block::default().borders(Borders::ALL).title(" ADEPTUS ADMINISTRATUM "))
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black).add_modifier(Modifier::BOLD));
         frame.render_widget(title, chunks[0]);
 
         // Commit history
