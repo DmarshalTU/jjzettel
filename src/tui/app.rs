@@ -1,5 +1,5 @@
 use crate::storage::note::Note;
-use crate::service::{NoteService, NoteStatistics};
+use crate::service::NoteService;
 use anyhow::Result;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
@@ -17,6 +17,7 @@ pub enum AppMode {
     TagRemove,
     Statistics,
     Help,
+    History,
 }
 
 pub struct App {
@@ -37,7 +38,12 @@ pub struct App {
 
 impl App {
     pub fn new() -> Result<Self> {
-        let repo_path = std::env::var("JJZETTEL_REPO").unwrap_or_else(|_| "./jjzettel_repo".to_string());
+        let repo_path = std::env::var("JJZETTEL_REPO").unwrap_or_else(|_| {
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| ".".to_string());
+            format!("{}/.jjzettel", home)
+        });
         let service = NoteService::new(&repo_path);
         service.initialize()?;
         
@@ -76,6 +82,7 @@ impl App {
             AppMode::TagRemove => self.handle_tag_remove_key(key)?,
             AppMode::Statistics => self.handle_statistics_key(key)?,
             AppMode::Help => self.handle_help_key(key)?,
+            AppMode::History => self.handle_history_key(key)?,
         }
         Ok(())
     }
@@ -242,6 +249,13 @@ impl App {
                             self.status_message = Some(format!("✗ Export failed: {}", e));
                         }
                     }
+                }
+            }
+            crossterm::event::KeyCode::Char('h') => {
+                // Show commit history
+                if let Some(_) = self.current_note {
+                    self.mode = AppMode::History;
+                    self.selected_index = 0;
                 }
             }
             crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
@@ -648,6 +662,7 @@ impl App {
             AppMode::TagRemove => self.render_tag_remove(frame),
             AppMode::Statistics => self.render_statistics(frame),
             AppMode::Help => self.render_help(frame),
+            AppMode::History => self.render_history(frame),
         }
     }
 
@@ -668,18 +683,73 @@ impl App {
             .style(Style::default().fg(Color::Cyan));
         frame.render_widget(title, chunks[0]);
 
-        // Notes list
+        // Notes list with enhanced formatting
         let notes_to_display = if self.is_searching { &self.filtered_notes } else { &self.notes };
         let items: Vec<ListItem> = notes_to_display
             .iter()
             .enumerate()
             .map(|(i, note)| {
-                let style = if i == self.selected_index {
+                let is_selected = i == self.selected_index;
+                let base_style = if is_selected {
                     Style::default().fg(Color::Yellow).bg(Color::DarkGray)
                 } else {
                     Style::default()
                 };
-                ListItem::new(format!("{} - {}", note.title, note.created_at)).style(style)
+                
+                // Format date nicely
+                let date_str = if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&note.created_at) {
+                    parsed.format("%Y-%m-%d").to_string()
+                } else {
+                    note.created_at.split('T').next().unwrap_or("").to_string()
+                };
+                
+                // Build rich text with title, tags, and preview
+                let mut lines = vec![Line::default()];
+                
+                // Title line
+                let title_line = if is_selected {
+                    Line::from(vec![
+                        Span::styled("▶ ", Style::default().fg(Color::Cyan)),
+                        Span::styled(&note.title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    ])
+                } else {
+                    Line::from(vec![
+                        Span::styled("  ", Style::default()),
+                        Span::styled(&note.title, Style::default().fg(Color::White)),
+                    ])
+                };
+                lines.push(title_line);
+                
+                // Preview line (first line of content, truncated)
+                let preview = note.content.lines().next().unwrap_or("").trim();
+                let preview_truncated: String = if preview.len() > 60 {
+                    format!("{}...", &preview[..60])
+                } else {
+                    preview.to_string()
+                };
+                if !preview_truncated.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled("  ", Style::default()),
+                        Span::styled(preview_truncated.clone(), Style::default().fg(Color::DarkGray)),
+                    ]));
+                }
+                
+                // Tags and metadata line
+                let mut meta_parts = vec![];
+                if !note.tags.is_empty() {
+                    let tags_str = note.tags.iter()
+                        .map(|t| format!("#{}", t))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    meta_parts.push(Span::styled(format!("  [{}] ", tags_str), Style::default().fg(Color::Blue)));
+                }
+                meta_parts.push(Span::styled(format!("📅 {}", date_str), Style::default().fg(Color::DarkGray)));
+                if !note.links.is_empty() {
+                    meta_parts.push(Span::styled(format!(" 🔗 {}", note.links.len()), Style::default().fg(Color::Magenta)));
+                }
+                lines.push(Line::from(meta_parts));
+                
+                ListItem::new(lines).style(base_style)
             })
             .collect();
 
@@ -694,7 +764,8 @@ impl App {
         
         let list = List::new(items)
             .block(Block::default().borders(Borders::ALL).title(list_title))
-            .highlight_style(Style::default().fg(Color::Yellow));
+            .highlight_style(Style::default().fg(Color::Yellow).bg(Color::DarkGray))
+            .highlight_symbol("▶ ");
         frame.render_stateful_widget(list, chunks[1], &mut state);
 
         // Help bar
@@ -716,61 +787,126 @@ impl App {
             .style(Style::default().fg(Color::Cyan));
         frame.render_widget(title, chunks[0]);
 
-        // Note content with links and tags
+        // Note content with enhanced formatting
         if let Some(ref note) = self.current_note {
-            let mut content_lines: Vec<String> = note.content.lines().map(|s| s.to_string()).collect();
+            // Build rich text with better formatting
+            let mut lines: Vec<Line> = Vec::new();
             
-            // Add tags section if there are any
+            // Format dates
+            let created_date = if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&note.created_at) {
+                parsed.format("%Y-%m-%d %H:%M").to_string()
+            } else {
+                note.created_at.split('T').next().unwrap_or("").to_string()
+            };
+            let updated_date = if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&note.updated_at) {
+                parsed.format("%Y-%m-%d %H:%M").to_string()
+            } else {
+                note.updated_at.split('T').next().unwrap_or("").to_string()
+            };
+            
+            // Metadata header
+            lines.push(Line::from(vec![
+                Span::styled("📅 Created: ", Style::default().fg(Color::Cyan)),
+                Span::styled(&created_date, Style::default().fg(Color::White)),
+                Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("✏️  Updated: ", Style::default().fg(Color::Cyan)),
+                Span::styled(&updated_date, Style::default().fg(Color::White)),
+            ]));
+            lines.push(Line::default());
+            
+            // Tags section with colored tags
             if !note.tags.is_empty() {
-                content_lines.push(String::new());
-                content_lines.push("--- Tags ---".to_string());
-                content_lines.push(note.tags.join(", "));
+                let mut tag_spans = vec![Span::styled("🏷️  Tags: ", Style::default().fg(Color::Cyan))];
+                for (i, tag) in note.tags.iter().enumerate() {
+                    if i > 0 {
+                        tag_spans.push(Span::styled(" ", Style::default()));
+                    }
+                    tag_spans.push(Span::styled(
+                        format!("#{}", tag),
+                        Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                    ));
+                }
+                lines.push(Line::from(tag_spans));
+                lines.push(Line::default());
             }
             
-            // Add backlinks section if there are any
-            if let Ok(backlinks) = self.service.get_backlinks(&note.id) {
-                if !backlinks.is_empty() {
-                    content_lines.push(String::new());
-                    content_lines.push("--- Backlinks (notes linking to this) ---".to_string());
-                    for (i, backlink) in backlinks.iter().enumerate() {
-                        let prefix = if i == self.backlink_selected_index {
-                            "← "
-                        } else {
-                            "  "
-                        };
-                        content_lines.push(format!("{}{}", prefix, backlink.title));
-                    }
+            // Content
+            for line in note.content.lines() {
+                lines.push(Line::from(Span::styled(line, Style::default().fg(Color::White))));
+            }
+            
+            // Backlinks section - collect backlinks first to avoid lifetime issues
+            let backlinks: Vec<_> = self.service.get_backlinks(&note.id).unwrap_or_default();
+            if !backlinks.is_empty() {
+                lines.push(Line::default());
+                lines.push(Line::from(Span::styled(
+                    "← Backlinks (notes linking to this):",
+                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                )));
+                for (i, backlink) in backlinks.iter().enumerate() {
+                    let prefix = if i == self.backlink_selected_index {
+                        Span::styled("  ▶ ", Style::default().fg(Color::Yellow))
+                    } else {
+                        Span::styled("    ", Style::default())
+                    };
+                    let title = backlink.title.clone();
+                    lines.push(Line::from(vec![
+                        prefix,
+                        Span::styled(title, Style::default().fg(Color::White)),
+                    ]));
                 }
             }
             
-            // Add links section if there are any
+            // Links section - collect linked notes first to avoid lifetime issues
             if !note.links.is_empty() {
-                content_lines.push(String::new());
-                content_lines.push("--- Linked Notes ---".to_string());
-                for (i, link_id) in note.links.iter().enumerate() {
-                    if let Ok(Some(linked_note)) = self.service.get_note(link_id) {
-                        let prefix = if i == self.link_selected_index {
-                            "→ "
-                        } else {
-                            "  "
-                        };
-                        content_lines.push(format!("{}{}", prefix, linked_note.title));
-                    }
+                lines.push(Line::default());
+                lines.push(Line::from(Span::styled(
+                    "→ Linked Notes:",
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                )));
+                let linked_notes: Vec<_> = note.links
+                    .iter()
+                    .filter_map(|link_id| {
+                        self.service.get_note(link_id).ok().flatten()
+                            .map(|n| (link_id.clone(), n.title.clone()))
+                    })
+                    .collect();
+                for (i, (_link_id, linked_title)) in linked_notes.iter().enumerate() {
+                    let prefix = if i == self.link_selected_index {
+                        Span::styled("  ▶ ", Style::default().fg(Color::Yellow))
+                    } else {
+                        Span::styled("    ", Style::default())
+                    };
+                    lines.push(Line::from(vec![
+                        prefix,
+                        Span::styled(linked_title.clone(), Style::default().fg(Color::White)),
+                    ]));
                 }
             }
             
-            let content_text = content_lines.join("\n");
-            let content = Paragraph::new(content_text)
+            let content = Paragraph::new(lines)
                 .block(Block::default().borders(Borders::ALL).title(note.title.as_str()))
                 .wrap(Wrap { trim: true });
             frame.render_widget(content, chunks[1]);
         }
 
-        // Status message
+        // Status message with better styling
         if let Some(ref message) = self.status_message {
-            let status = Paragraph::new(message.as_str())
+            let (status_color, status_symbol) = if message.starts_with("✓") || message.contains("success") {
+                (Color::Green, "✓")
+            } else if message.starts_with("✗") || message.contains("error") || message.contains("Error") {
+                (Color::Red, "✗")
+            } else {
+                (Color::Yellow, "ℹ")
+            };
+            let status_text = if message.starts_with("✓") || message.starts_with("✗") || message.starts_with("ℹ") {
+                message.clone()
+            } else {
+                format!("{} {}", status_symbol, message)
+            };
+            let status = Paragraph::new(status_text.as_str())
                 .block(Block::default().borders(Borders::ALL).title("Status"))
-                .style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(status_color));
             let status_chunk = if chunks.len() > 3 { chunks[2] } else { chunks[chunks.len() - 2] };
             frame.render_widget(status, status_chunk);
         }
@@ -779,12 +915,12 @@ impl App {
         let help_text = if let Some(ref note) = self.current_note {
             let has_backlinks = self.service.get_backlinks(&note.id).map(|b| !b.is_empty()).unwrap_or(false);
             if !note.links.is_empty() || has_backlinks {
-                "e: edit | l: link | t: tag | u: unlink | x: remove tag | j/k: navigate | Enter: open | E: export | Esc: back"
+                "e: edit | l: link | t: tag | u: unlink | x: remove tag | h: history | j/k: navigate | Enter: open | E: export | Esc: back"
             } else {
-                "e: edit | l: link | t: tag | x: remove tag | E: export | Esc: back"
+                "e: edit | l: link | t: tag | x: remove tag | h: history | E: export | Esc: back"
             }
         } else {
-            "e: edit | l: link | t: tag | E: export | Esc: back"
+            "e: edit | l: link | t: tag | h: history | E: export | Esc: back"
         };
         let help = Paragraph::new(help_text)
             .block(Block::default().borders(Borders::ALL).title("Help"))
@@ -805,10 +941,18 @@ impl App {
             .style(Style::default().fg(Color::Cyan));
         frame.render_widget(title, chunks[0]);
 
-        // Edit content
+        // Edit content with character count
+        let char_count = self.input_buffer.len();
+        let line_count = self.input_buffer.lines().count();
+        let title_text = if let Some(ref note) = self.current_note {
+            format!("Editing: {} ({} chars, {} lines)", note.title, char_count, line_count)
+        } else {
+            format!("Editing ({} chars, {} lines)", char_count, line_count)
+        };
         let content = Paragraph::new(self.input_buffer.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Editing"))
-            .wrap(Wrap { trim: true });
+            .block(Block::default().borders(Borders::ALL).title(title_text))
+            .wrap(Wrap { trim: true })
+            .style(Style::default().fg(Color::White));
         frame.render_widget(content, chunks[1]);
 
         // Help bar
@@ -830,10 +974,20 @@ impl App {
             .style(Style::default().fg(Color::Cyan));
         frame.render_widget(title, chunks[0]);
 
-        // Create content
+        // Create content with character count and title preview
+        let char_count = self.input_buffer.len();
+        let line_count = self.input_buffer.lines().count();
+        let first_line = self.input_buffer.lines().next().unwrap_or("").trim();
+        let title_preview = if first_line.is_empty() {
+            "Untitled (first line will be title)"
+        } else {
+            first_line
+        };
+        let title_text = format!("New Note: {} ({} chars, {} lines)", title_preview, char_count, line_count);
         let content = Paragraph::new(self.input_buffer.as_str())
-            .block(Block::default().borders(Borders::ALL).title("New Note (first line is title)"))
-            .wrap(Wrap { trim: true });
+            .block(Block::default().borders(Borders::ALL).title(title_text))
+            .wrap(Wrap { trim: true })
+            .style(Style::default().fg(Color::White));
         frame.render_widget(content, chunks[1]);
 
         // Help bar
@@ -855,23 +1009,51 @@ impl App {
             .style(Style::default().fg(Color::Cyan));
         frame.render_widget(title, chunks[0]);
 
-        // Search input
-        let search_prompt = format!("Search: {}", self.input_buffer);
+        // Search input with better styling
+        let search_prompt = format!("🔍 {}", self.input_buffer);
         let search = Paragraph::new(search_prompt.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Search"))
+            .block(Block::default().borders(Borders::ALL).title("Search (type to search, Enter to apply)"))
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(search, chunks[1]);
 
-        // Results preview
-        let results_text = if self.filtered_notes.is_empty() {
-            "No results".to_string()
+        // Results preview with list
+        if self.filtered_notes.is_empty() {
+            let results_text = Paragraph::new("No results found. Try a different search term.")
+                .block(Block::default().borders(Borders::ALL).title(format!("Results (0 found)")))
+                .style(Style::default().fg(Color::Red))
+                .wrap(Wrap { trim: true });
+            frame.render_widget(results_text, chunks[2]);
         } else {
-            format!("{} results found", self.filtered_notes.len())
-        };
-        let results = Paragraph::new(results_text)
-            .block(Block::default().borders(Borders::ALL).title("Results"))
-            .wrap(Wrap { trim: true });
-        frame.render_widget(results, chunks[2]);
+            let results_list: Vec<ListItem> = self.filtered_notes
+                .iter()
+                .take(20) // Show first 20 results for performance
+                .map(|note| {
+                    let preview = note.content.lines().next().unwrap_or("").trim();
+                    let preview_truncated: String = if preview.len() > 50 {
+                        format!("{}...", &preview[..50])
+                    } else {
+                        preview.to_string()
+                    };
+                    let note_title = note.title.clone();
+                    ListItem::new(vec![
+                        Line::from(vec![
+                            Span::styled(note_title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  ", Style::default()),
+                            Span::styled(preview_truncated.clone(), Style::default().fg(Color::DarkGray)),
+                        ]),
+                    ])
+                })
+                .collect();
+            
+            let list = List::new(results_list)
+                .block(Block::default().borders(Borders::ALL).title(format!("Results ({} found, showing first 20)", self.filtered_notes.len())))
+                .highlight_style(Style::default().fg(Color::Yellow));
+            let mut list_state = ratatui::widgets::ListState::default();
+            list_state.select(Some(0));
+            frame.render_stateful_widget(list, chunks[2], &mut list_state);
+        }
     }
 
     fn render_delete_confirm(&self, frame: &mut Frame) {
@@ -1002,7 +1184,7 @@ impl App {
         frame.render_widget(title, chunks[0]);
 
         // Confirmation message
-        let message = if let Some(ref note) = self.current_note {
+        let message = if let Some(ref _note) = self.current_note {
             if let Ok(Some(linked_note)) = self.service.get_note(&self.input_buffer) {
                 format!("Unlink note: {}?\n\nPress Enter/y to confirm, Esc/n to cancel", linked_note.title)
             } else {
@@ -1175,6 +1357,7 @@ VIEW MODE:
   t              Add tag
   u              Unlink selected note
   x              Remove tag
+  h              Show commit history
   j / ↓          Navigate links (backlinks first)
   k / ↑          Navigate links (backlinks first)
   Enter          Open selected link
@@ -1198,6 +1381,70 @@ OTHER:
             .wrap(Wrap { trim: true })
             .style(Style::default().fg(Color::White));
         frame.render_widget(help_para, chunks[1]);
+
+        // Help bar
+        let help = Paragraph::new("Esc: back")
+            .block(Block::default().borders(Borders::ALL).title("Help"))
+            .style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(help, chunks[2]);
+    }
+
+    fn handle_history_key(&mut self, key: crossterm::event::KeyCode) -> Result<()> {
+        match key {
+            crossterm::event::KeyCode::Esc => {
+                self.mode = AppMode::View;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn render_history(&self, frame: &mut Frame) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
+            .split(frame.area());
+
+        // Title bar
+        let title = Paragraph::new("jjzettel - Corporate Second Brain")
+            .block(Block::default().borders(Borders::ALL).title("jjzettel"))
+            .style(Style::default().fg(Color::Cyan));
+        frame.render_widget(title, chunks[0]);
+
+        // Commit history
+        if let Some(ref note) = self.current_note {
+            let (history_text, error_color) = match self.service.get_note_history(&note.id) {
+                Ok(history) => {
+                    if history.is_empty() {
+                        ("No commit history found for this note.\n\nNote: Make sure you've saved the note at least once.".to_string(), Color::Yellow)
+                    } else {
+                        let text = history
+                            .iter()
+                            .map(|commit| {
+                                format!("{} | {} | {} | {}", 
+                                    commit.id, 
+                                    commit.message, 
+                                    commit.author, 
+                                    commit.timestamp
+                                )
+                            })
+                            .collect::<Vec<String>>()
+                            .join("\n");
+                        (text, Color::Yellow)
+                    }
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to load commit history:\n\n{}\n\nMake sure Jujutsu is properly initialized and the note file exists.", e);
+                    (error_msg, Color::Red)
+                }
+            };
+
+            let history_para = Paragraph::new(history_text)
+                .block(Block::default().borders(Borders::ALL).title(format!("Commit History: {}", note.title)))
+                .wrap(Wrap { trim: true })
+                .style(Style::default().fg(error_color));
+            frame.render_widget(history_para, chunks[1]);
+        }
 
         // Help bar
         let help = Paragraph::new("Esc: back")

@@ -12,8 +12,9 @@ pub struct Note {
 }
 
 impl Note {
+    /// Create a new note with a unique ID generated from title and timestamp
     pub fn new(title: String, content: String) -> Self {
-        // Generate a simple ID based on timestamp
+        // Generate unique ID using MD5 hash of title and nanosecond timestamp
         let id = format!(
             "{:x}",
             md5::compute(format!("{}{}", title, chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)))

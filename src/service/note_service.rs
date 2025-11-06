@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::storage::jujutsu::Jujutsu;
 use crate::storage::note::Note;
 use std::path::PathBuf;
+use std::process::Command;
 
 pub struct NoteService {
     jujutsu: Jujutsu,
@@ -35,14 +36,16 @@ impl NoteService {
     pub fn create_note(&self, title: String, content: String) -> Result<Note> {
         let note = Note::new(title.clone(), content.clone());
         
-        // Save note to file
+        // Save note to file first
         let note_file = self.notes_dir.join(format!("{}.json", note.id));
         let note_json = serde_json::to_string_pretty(&note)?;
         std::fs::write(&note_file, note_json)?;
         
-        // Create commit in Jujutsu
-        let commit_message = format!("Note: {}", title);
-        let _commit_id = self.jujutsu.create_commit(&commit_message, &content)?;
+        // Create commit in Jujutsu for the actual JSON file
+        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let commit_message = format!("Note: {} ({})", title, timestamp);
+        let file_path_str = note_file.to_string_lossy().to_string();
+        let _commit_id = self.jujutsu.create_commit_for_file(&commit_message, &file_path_str)?;
         
         Ok(note)
     }
@@ -65,9 +68,11 @@ impl NoteService {
         let note_json = serde_json::to_string_pretty(&new_note_with_tags)?;
         std::fs::write(&note_file, note_json)?;
         
-        // Create commit in Jujutsu
-        let commit_message = format!("Duplicate: {}", new_title);
-        let _commit_id = self.jujutsu.create_commit(&commit_message, &new_note_with_tags.content)?;
+        // Create commit in Jujutsu for the actual JSON file
+        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let commit_message = format!("Duplicate: {} ({})", new_title, timestamp);
+        let file_path_str = note_file.to_string_lossy().to_string();
+        let _commit_id = self.jujutsu.create_commit_for_file(&commit_message, &file_path_str)?;
         
         Ok(new_note_with_tags)
     }
@@ -132,9 +137,11 @@ impl NoteService {
         let note_json = serde_json::to_string_pretty(&note)?;
         std::fs::write(&note_file, note_json)?;
         
-        // Create commit in Jujutsu for the update
-        let commit_message = format!("Update: {}", note.title);
-        self.jujutsu.create_commit(&commit_message, &note.content)?;
+        // Create commit in Jujutsu for the actual JSON file
+        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let commit_message = format!("Update: {} ({})", note.title, timestamp);
+        let file_path_str = note_file.to_string_lossy().to_string();
+        self.jujutsu.create_commit_for_file(&commit_message, &file_path_str)?;
         
         Ok(note)
     }
@@ -195,11 +202,19 @@ impl NoteService {
         let note_file = self.notes_dir.join(format!("{}.json", id));
         
         if note_file.exists() {
+            // Delete the file
             std::fs::remove_file(&note_file)?;
             
             // Create commit in Jujutsu for deletion
-            let commit_message = format!("Delete note: {}", id);
-            let _commit_id = self.jujutsu.create_commit(&commit_message, "")?;
+            let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let commit_message = format!("Delete note: {} ({})", id, timestamp);
+            // Just describe the deletion - the file is already removed
+            Command::new("jj")
+                .arg("describe")
+                .arg("-m")
+                .arg(&commit_message)
+                .current_dir(&self.jujutsu.repo_path())
+                .output()?;
         }
         
         Ok(())
@@ -303,6 +318,18 @@ impl NoteService {
         md.push('\n');
         
         md
+    }
+
+    /// Get commit history for a note
+    pub fn get_note_history(&self, note_id: &str) -> Result<Vec<crate::storage::CommitInfo>> {
+        // Get the note to extract its title for matching
+        let note = self.get_note(note_id)?;
+        let note_title = note.as_ref().map(|n| n.title.as_str()).unwrap_or("");
+        
+        // Get the full path to the note file
+        let note_file = self.notes_dir.join(format!("{}.json", note_id));
+        let note_file_str = note_file.to_string_lossy().to_string();
+        self.jujutsu.get_file_history_with_title(&note_file_str, note_title)
     }
 
     /// Get statistics about the knowledge base

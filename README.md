@@ -54,12 +54,75 @@ cargo run
 
 ### Repository Location
 
-By default, jjzettel creates a repository in `./jjzettel_repo`. You can customize this by setting the `JJZETTEL_REPO` environment variable:
+#### Local Repository (Default)
+
+By default, jjzettel creates a local repository in `~/.jjzettel` (home directory) on first use. You can customize this by setting the `JJZETTEL_REPO` environment variable:
 
 ```bash
+# Use default local repo (~/.jjzettel)
+cargo run
+
+# Use custom local repo path
 export JJZETTEL_REPO=/path/to/your/repo
 cargo run
+
+# Or specify inline
+JJZETTEL_REPO=/path/to/repo cargo run
 ```
+
+**First-time use:** The repository is automatically initialized if it doesn't exist. Just run the app and it will create the repo for you.
+
+#### Remote Repository (Git Sync)
+
+To use a remote Git repository for collaboration:
+
+1. **Clone an existing Git repository:**
+   ```bash
+   git clone https://github.com/your-org/knowledge-base.git
+   cd knowledge-base
+   jj init --git .
+   export JJZETTEL_REPO=$(pwd)
+   cargo run
+   ```
+
+2. **Create a new repo and push to Git:**
+   ```bash
+   # Create local repo
+   mkdir my-knowledge-base
+   cd my-knowledge-base
+   jj init --git .
+   
+   # Add Git remote
+   git remote add origin https://github.com/your-org/knowledge-base.git
+   
+   # Use it
+   export JJZETTEL_REPO=$(pwd)
+   cargo run
+   
+   # Push to remote
+   jj git push
+   ```
+
+3. **Sync with remote:**
+   ```bash
+   # Pull latest changes
+   jj git pull
+   
+   # Push your changes
+   jj git push
+   ```
+
+#### Shared Network Repository
+
+For teams using shared network storage (NFS, SMB, etc.):
+
+```bash
+# Point to shared network path
+export JJZETTEL_REPO=/mnt/shared/company-knowledge-base
+cargo run
+```
+
+All team members point to the same path, and Jujutsu handles concurrent access automatically.
 
 ## ⌨️ Keybindings
 
@@ -130,23 +193,29 @@ jjzettel/
 
 Since jjzettel uses Jujutsu as its storage backend, collaboration is built-in:
 
-- **Shared Repository**: Multiple users can work with the same Jujutsu repository
-  - Via network file system (NFS, SMB, etc.)
-  - Via Git remote (using `jj git push/pull`)
+**Workflow Summary:**
 
-- **Sync Options**:
-  ```bash
-  # Using Git remote
-  jj git remote add origin <git-url>
-  jj git push
-  jj git pull
-  
-  # Or simply use shared network storage
-  export JJZETTEL_REPO=/shared/network/path/jjzettel_repo
-  ```
+1. **Local-only (default):**
+   - First run: Creates `~/.jjzettel` automatically
+   - Subsequent runs: Uses existing repo
+   - Perfect for personal use
 
-- **Conflict Resolution**: Jujutsu handles merging automatically, making collaboration seamless
-- **No Server Required**: Each client connects directly to the Jujutsu repository
+2. **Remote Git (collaboration):**
+   - Clone existing repo or create new one
+   - Initialize with `jj init --git .`
+   - Set `JJZETTEL_REPO` to the repo path
+   - Sync with `jj git push/pull` as needed
+
+3. **Shared Network (team):**
+   - All team members set `JJZETTEL_REPO` to same network path
+   - Jujutsu handles concurrent access
+   - No manual sync needed
+
+**Notes:**
+- If `JJZETTEL_REPO` is not set, defaults to `~/.jjzettel` (home directory)
+- Repository is auto-initialized if it doesn't exist
+- For Git remotes, use `jj git push/pull` commands outside the app
+- The app doesn't manage Git remotes - use Jujutsu CLI for that
 
 ## 📝 Note Format
 
